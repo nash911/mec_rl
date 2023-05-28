@@ -33,7 +33,7 @@ def random_policy(env, num_episodes, show=False):
             actions = np.zeros([env.n_iot])
             for iot_index, agent in enumerate(env.possible_agents):
                 # print(f"observation[agent]:\n{observation[agent]}")
-                obs = observation[agent]['observation'][:-env.n_fog]
+                obs = observation[agent]['obs_mob']
                 if np.sum(obs) == 0:
                     # if there is no task, action = 0 (also need to be stored)
                     actions[iot_index] = 0

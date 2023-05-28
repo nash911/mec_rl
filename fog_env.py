@@ -202,8 +202,9 @@ class FOGEnv(ParallelEnv):
                                self.t_iot_comp[iot_index],
                                self.t_iot_tran[iot_index],
                                np.squeeze(self.b_fog_comp[iot_index, :])])
-            observations[agent]['observation'] = np.hstack((observation_all[iot_index, :],
-                                                            lstm_state_all[iot_index, :]))
+
+            observations[agent]['obs_mob'] = observation_all[iot_index, :]
+            observations[agent]['obs_fog'] = lstm_state_all[iot_index, :]
 
         # Empty infos dict ∀ agents
         infos = {agent: {} for agent in self.agents}
@@ -486,9 +487,8 @@ class FOGEnv(ParallelEnv):
 
                 lstm_state_all[iot_index, :] = np.hstack(self.fog_iot_m_observe)
 
-                observations[agent]['observation'] = \
-                    np.hstack((observation_all[iot_index, :],
-                               lstm_state_all[iot_index, :]))
+                observations[agent]['obs_mob'] = observation_all[iot_index, :]
+                observations[agent]['obs_fog'] = lstm_state_all[iot_index, :]
 
         # Check if end of episode
         if done:
