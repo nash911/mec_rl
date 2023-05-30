@@ -7,7 +7,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from utils import batchify_obs, batchify, unbatchify, evaluate, plot_all_marl
+from utils import batchify_obs, batchify, unbatchify, evaluate, plot_all_marl, plot_graphs
 
 
 class CleanPPO():
@@ -49,7 +49,8 @@ class CleanPPO():
         start_time = time.time()
 
         # Create a matlibplot canvas for plotting learning curves
-        fig, axs = plt.subplots(1, figsize=(10, 6), sharey=False, sharex=True)
+        # fig, axs = plt.subplots(1, figsize=(10, 6), sharey=False, sharex=True)
+        fig, axs = plt.subplots(3, figsize=(10, 12), sharex=True)
 
         # ALGO Logic: Storage setup
         obs_mob_buff = {
@@ -75,8 +76,14 @@ class CleanPPO():
         # For storing plotting data
         train_rewards = list()
         train_episode_t = list()
+        train_dropped = list()
+        train_delay = list()
+
         eval_rewards = list()
         eval_episode_t = list()
+        eval_dropped_ratios = list()
+        eval_delays = list()
+
         entrophy_list = list()
 
         # For learning-rate annealing
@@ -202,19 +209,26 @@ class CleanPPO():
                             values_buff[agent][step+1] = values
                     break
 
-            # train_rewards.append(total_episodic_return/self.episode_len/self.num_agents)
             train_rewards.append(np.mean(rewards_list)/self.train_env.n_iot)
             train_episode_t.append(episode)
+
+            dropped_ratio = np.mean(dropped_list)/self.train_env.n_iot
+            train_dropped.append(dropped_ratio)
+
+            avg_delay = np.mean(delay_list)/self.train_env.n_iot
+            train_delay.append(avg_delay)
 
             # Evaluate Policy
             if (episode - 1) % eval_freq == 0 or episode == num_episodes:
                 self.eval_agent()
-                eval_reward = evaluate(env=self.train_env, rl_agents=self.agents,
-                                       device=self.device)
+                eval_reward, eval_dropped, eval_delay = evaluate(
+                    env=self.train_env, rl_agents=self.agents, device=self.device)
                 self.train_agent()
 
                 eval_rewards.append(eval_reward)
                 eval_episode_t.append(episode)
+                eval_dropped_ratios.append(eval_dropped)
+                eval_delays.append(eval_delay)
 
                 if eval_reward >= best_eval_rewards:
                     best_eval_rewards = eval_reward
@@ -231,9 +245,13 @@ class CleanPPO():
                     np.save(f, np.array(eval_rewards))
 
                 # Plot learning curves
-                plot_all_marl(axs, train_episode_t, train_rewards, eval_episode_t,
-                              eval_rewards, entrophy_list, text=saved_model_txt,
-                              show=plot, path=path, save=True)
+                # plot_all_marl(axs, train_episode_t, train_rewards, eval_episode_t,
+                #               eval_rewards, entrophy_list, text=saved_model_txt,
+                #               show=plot, path=path, save=True)
+                plot_graphs(axs, train_episode_t, eval_episode_t, train_rewards,
+                            eval_rewards, train_dropped, eval_dropped_ratios, train_delay,
+                            eval_delays, text=saved_model_txt, show=plot, path=path,
+                            save=True)
 
             # bootstrap returns if not done
             advantages = {}

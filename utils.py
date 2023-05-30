@@ -107,7 +107,8 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
         count = {action: actions_dict[a].count(action) for action in range(env.n_actions)}
         print(f"{a}: {count}")
 
-    return np.mean(rewards_list)/env.n_iot
+    return (np.mean(rewards_list)/env.n_iot, np.mean(dropped_list)/env.n_iot,
+            np.mean(delay_list)/env.n_iot)
 
 
 def plot_all_marl(
@@ -132,6 +133,12 @@ def plot_all_marl(
     if save:
         plt.savefig(path + "learning_curves.png")
 
+        with open(path + 'plots/train_costs.npy', 'wb') as f:
+            np.save(f, np.array(train_rewards))
+
+        with open(path + 'plots/eval_costs.npy', 'wb') as f:
+            np.save(f, np.array(eval_rewards))
+
     if show:
         plt.show(block=False)
         plt.pause(0.01)
@@ -140,25 +147,29 @@ def plot_all_marl(
         plt.close()
 
 
-def plot_graphs(axs, train_cost, train_dropped, train_delay, show=False, save=False,
-                path=None):
-    x = np.arange(len(train_cost)).tolist()
+def plot_graphs(axs, train_episode_t, eval_episode_t, train_cost, eval_cost,
+                train_dropped, eval_dropped, train_delay, eval_delay, text=None,
+                show=False, save=False, path=None):
+    # x = np.arange(len(train_cost)).tolist()
     axs[0].clear()
-    axs[0].plot(x, train_cost, color='red', label='Training')
+    axs[0].plot(train_episode_t, train_cost, color='red', label='Train')
+    axs[0].plot(eval_episode_t, eval_cost, color='blue', label='Eval')
     axs[0].set(title='Avg. Cost')
     axs[0].set(ylabel='Avg. Cost')
     axs[0].set(xlabel='Episode')
     axs[0].legend(loc='upper right')
 
     axs[1].clear()
-    axs[1].plot(x, train_dropped, color='blue', label='Training')
+    axs[1].plot(train_episode_t, train_dropped, color='red', label='Train')
+    axs[1].plot(eval_episode_t, eval_dropped, color='blue', label='Eval')
     axs[1].set(title='Ratio of Dropped Tasks')
     axs[1].set(ylabel='Dropped Ratio')
     axs[1].set(xlabel='Episode')
     axs[1].legend(loc='upper right')
 
     axs[2].clear()
-    axs[2].plot(x, train_delay, color='green', label='Training')
+    axs[2].plot(train_episode_t, train_delay, color='red', label='Train')
+    axs[2].plot(eval_episode_t, eval_delay, color='blue', label='Eval')
     axs[2].set(title='Avg. Task Delay')
     axs[2].set(ylabel='Avg. Delay (Sec)')
     axs[2].set(xlabel='Episode')
@@ -167,14 +178,23 @@ def plot_graphs(axs, train_cost, train_dropped, train_delay, show=False, save=Fa
     if save:
         plt.savefig(path + "plots/learning_curves.png")
 
-        with open(path + 'plots/avg_cost.npy', 'wb') as f:
+        with open(path + 'plots/train_costs.npy', 'wb') as f:
             np.save(f, np.array(train_cost))
 
-        with open(path + 'plots/dropped_ratio.npy', 'wb') as f:
+        with open(path + 'plots/train_dropped_ratios.npy', 'wb') as f:
             np.save(f, np.array(train_dropped))
 
-        with open(path + 'plots/avg_delay.npy', 'wb') as f:
+        with open(path + 'plots/train_delays.npy', 'wb') as f:
             np.save(f, np.array(train_delay))
+
+        with open(path + 'plots/eval_costs.npy', 'wb') as f:
+            np.save(f, np.array(eval_cost))
+
+        with open(path + 'plots/eval_dropped_ratios.npy', 'wb') as f:
+            np.save(f, np.array(eval_dropped))
+
+        with open(path + 'plots/eval_delays.npy', 'wb') as f:
+            np.save(f, np.array(eval_delay))
 
     if show:
         plt.show(block=False)
