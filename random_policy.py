@@ -30,16 +30,16 @@ def random_policy(env, num_episodes, show=False):
         while True:
 
             # PERFORM ACTION
-            actions = np.zeros([env.n_iot])
+            actions = {}
             for iot_index, agent in enumerate(env.possible_agents):
                 # print(f"observation[agent]:\n{observation[agent]}")
                 obs = observation[agent]['obs_mob']
                 if np.sum(obs) == 0:
                     # if there is no task, action = 0 (also need to be stored)
-                    actions[iot_index] = 0
+                    actions[agent] = 0
                     # print("No Task")
                 else:  # Follow a random action
-                    actions[iot_index] = np.random.randint(env.n_actions)
+                    actions[agent] = np.random.randint(env.n_actions)
                     # print(f"Random Action: {actions[iot_index]}")
 
             # OBSERVE THE NEXT STATE AND PROCESS DELAY (REWARD)
