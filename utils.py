@@ -40,6 +40,7 @@ def unbatchify(x, env):
 def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
              num_episodes: int = 1) -> Sequence[Union[int, float]]:
     actions = {}
+    actions_dict = {agent: list() for agent in env.possible_agents}
     # cumu_rewards = 0
 
     # Evaluate the policy for num_episode episodes
@@ -71,6 +72,8 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
                                     tuple(obs_fog_buff[agent])).float().to(device), 0),
                     obs_mob[agent], action_mask=action_mask[agent], inference=True)
 
+                actions_dict[agent].append(actions[agent].item())
+
             obs, rewards, terms, truncs, infos = \
                 env.step(unbatchify(actions, env))
             terms = [terms[a] for a in terms]
@@ -80,7 +83,6 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
             unfinish_inds = env.process_delay_unfinish_ind
 
             for iot_index, a in enumerate(env.possible_agents):
-                # cumu_rewards += rewards[a]
                 update_index = np.where((1 - reward_indicator[:, iot_index]) *
                                         process_delay[:, iot_index] > 0)[0]
 
@@ -100,6 +102,10 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
 
                         rewards_list.append(-reward)
                         # rewards_list.append(reward)
+
+    for a in env.possible_agents:
+        count = {action: actions_dict[a].count(action) for action in range(env.n_actions)}
+        print(f"{a}: {count}")
 
     return np.mean(rewards_list)/env.n_iot
 
