@@ -105,22 +105,22 @@ class FOGEnv(ParallelEnv):
 
         self.fog_drop = np.zeros([self.n_iot, self.n_fog])
 
-
-
         # Possible agents in the simulation are the number of drones
         self.possible_agents = ["iot_%d" % iot for iot in range(num_iot)]
         self.agents = self.possible_agents[:]
 
-        # Observation space consists of two 2D matrices representing the grid, with the
-        # first matrix consisting the positions of the users, and the second that of the
-        # drones
-        self.observation_spaces = \
-            dict(zip(self.agents, [Box(shape=(3 + (self.n_fog*2),), low=0, high=np.inf,
-                                       dtype=self.dtype)] * len(self.agents)))
+        # Observation space
+        # self.observation_spaces = \
+        #     dict(zip(self.agents, [Box(shape=(3 + (self.n_fog*2),), low=0, high=np.inf,
+        #                                dtype=self.dtype)] * len(self.agents)))
+        self.observation_spaces = dict(zip(self.agents, [{
+            'obs_mob': Box(shape=(3 + self.n_fog,), low=0, high=np.inf, dtype=self.dtype),
+            'obs_fog': Box(shape=(self.n_fog,), low=0, high=np.inf, dtype=self.dtype)}] *
+            len(self.agents)))
 
-        # Possible actions are one-step hop to the surrounding 8 grids + 1 NoOp
+        # Possible actions are self_compute + num_of_fog
         self.action_spaces = dict(
-            zip(self.agents, [Discrete(self.n_fog + 2)] * len(self.agents)))
+            zip(self.agents, [Discrete(self.n_fog + 1)] * len(self.agents)))
 
         # Action mask for indicating valid actions (adjacent grid cells a drone can
         # move to) at a time-step
@@ -206,6 +206,10 @@ class FOGEnv(ParallelEnv):
             observations[agent]['obs_mob'] = observation_all[iot_index, :]
             observations[agent]['obs_fog'] = lstm_state_all[iot_index, :]
 
+            observations[agent]['action_mask'] = np.ones(self.n_actions)
+            if np.sum(observation_all[iot_index, :]) == 0:
+                observations[agent]['action_mask'][1:] = 0
+
         # Empty infos dict ∀ agents
         infos = {agent: {} for agent in self.agents}
 
@@ -223,7 +227,7 @@ class FOGEnv(ParallelEnv):
         iot_action_local = np.zeros([self.n_iot], np.int32)
         iot_action_fog = np.zeros([self.n_iot], np.int32)
         for iot_index in range(self.n_iot):
-            iot_action = actions[iot_index]
+            iot_action = actions[f"iot_{iot_index}"]
             iot_action_fog[iot_index] = int(iot_action - 1)
             if iot_action == 0:
                 iot_action_local[iot_index] = 1
@@ -468,7 +472,9 @@ class FOGEnv(ParallelEnv):
                         self.process_delay_unfinish_ind[time_index, iot_index] = 1
 
         # Initialize observations and action_mask ∀ agents
-        observations = {a: {"observation": None, "action_mask": None}
+        observations = {a: {"obs_mob": np.zeros(self.n_features),
+                            "obs_fog": np.zeros(self.n_features),
+                            "action_mask": None}
                         for a in self.agents}
 
         # Get observations ∀ agents
@@ -490,6 +496,11 @@ class FOGEnv(ParallelEnv):
                 observations[agent]['obs_mob'] = observation_all[iot_index, :]
                 observations[agent]['obs_fog'] = lstm_state_all[iot_index, :]
 
+        for agent in self.agents:
+            observations[agent]['action_mask'] = np.ones(self.n_actions)
+            if np.sum(observations[agent]['obs_mob']) == 0:
+                observations[agent]['action_mask'][1:] = 0
+
         # Check if end of episode
         if done:
             truncations = {a: True for a in self.agents}
@@ -508,7 +519,9 @@ class FOGEnv(ParallelEnv):
         else:
             reward = - delay
 
+        # TODO: Maybe revert this?
         return reward
+        # return np.exp(reward)
 
     # def save_env(self):
     #     # Create dict with Env parameters
