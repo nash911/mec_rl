@@ -278,17 +278,28 @@ class CleanPPO():
                 b_returns = returns[agent][:end_step]
                 b_values = values_buff[agent][:end_step]
 
-                b_inds = np.arange(len(b_obs_mob))
+                # b_inds = np.arange(len(b_obs_mob))
+                b_inds = np.where(torch.sum(b_obs_mob, axis=-1) != 0)[0]
+                # print(f"AFTER b_inds:{b_inds}")
+
+                b_size = (batch_size + 1 if len(b_inds) % batch_size == 1 else batch_size)
+
                 for epoch in range(update_epochs):
                     np.random.shuffle(b_inds)
-                    for start in range(0, len(b_obs_mob), batch_size):
-                        end = start + batch_size
+                    # for start in range(0, len(b_obs_mob), batch_size):
+                    #     end = start + batch_size
+                    for start in range(0, len(b_inds), b_size):
+                        end = start + b_size
                         mb_inds = b_inds[start:end]
+
+                        # print(f"epoch: {epoch} // start: {start}  --  end: {end}")
 
                         recurrent_inp = torch.zeros((len(mb_inds),
                                                      self.max_recurrent_steps,
                                                      self.train_env.n_lstm_state)
                                                     ).to(self.device)
+
+                        # print(f"recurrent_inp.shape: {recurrent_inp.shape}")
 
                         for i, ind in enumerate(mb_inds):
                             start_idx = max(0, ind - self.max_recurrent_steps)

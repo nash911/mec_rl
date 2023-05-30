@@ -94,7 +94,13 @@ class NNAgent(nn.Module):
         # print(f"recurrent_inp: {recurrent_inp.shape}")
         # print(f"fc_inp: {fc_inp.shape}")
         # print(f"recurrent_out: {recurrent_out.shape}")
+
         fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
+        # try:
+        #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
+        # except RuntimeError:
+        #     fc_out = \
+        #         self.network(torch.hstack((fc_inp, torch.unsqueeze(recurrent_out, 0))))
 
         logits = self.actor(fc_out)
 
