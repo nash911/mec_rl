@@ -32,15 +32,12 @@ def random_policy(env, num_episodes, show=False):
             # PERFORM ACTION
             actions = {}
             for iot_index, agent in enumerate(env.possible_agents):
-                # print(f"observation[agent]:\n{observation[agent]}")
                 obs = observation[agent]['obs_mob']
                 if np.sum(obs) == 0:
                     # if there is no task, action = 0 (also need to be stored)
                     actions[agent] = 0
-                    # print("No Task")
                 else:  # Follow a random action
-                    actions[agent] = np.random.randint(env.n_actions)
-                    # print(f"Random Action: {actions[iot_index]}")
+                    actions[agent] = np.random.randint(1, env.n_actions)
 
             # OBSERVE THE NEXT STATE AND PROCESS DELAY (REWARD)
             observations_next, rewards, terminations, truncations, infos = \
@@ -90,13 +87,6 @@ def random_policy(env, num_episodes, show=False):
 
         print(f"Episode: {episode} - Reward: {avg_reward} - Dropped: {dropped_ratio} - "
               + f"Delay: {avg_delay}")
-
-        if episode % 10 == 0:
-            plot_graphs(axs, episode_rewards, episode_dropped, episode_delay, show=show,
-                        save=False)
-
-    plot_graphs(axs, episode_rewards, episode_dropped, episode_delay, show=show,
-                save=False)
 
     input("Completed.\nPress Enter to Finish")
 

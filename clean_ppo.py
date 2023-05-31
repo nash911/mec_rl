@@ -89,7 +89,7 @@ class CleanPPO():
         # For learning-rate annealing
         learning_episodes = 0
 
-        best_eval_rewards = -np.inf
+        best_eval_rewards = np.inf
 
         # Rollout-Store-Optimize loop
         for episode in range(1, num_episodes + 1):
@@ -230,7 +230,7 @@ class CleanPPO():
                 eval_dropped_ratios.append(eval_dropped)
                 eval_delays.append(eval_delay)
 
-                if eval_reward >= best_eval_rewards:
+                if eval_reward <= best_eval_rewards:
                     best_eval_rewards = eval_reward
                     saved_model_txt = "Best Model Saved @ Episode %d" % episode
                     for agent in self.train_env.possible_agents:

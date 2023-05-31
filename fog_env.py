@@ -52,8 +52,8 @@ class FOGEnv(ParallelEnv):
         self.bitArrive_set = np.arange(self.min_bit_arrive, self.max_bit_arrive, 0.1)
         self.bitArrive = np.zeros([self.n_time, self.n_iot])
 
-        # ACTION: 0, local; 1, fog 0; 2, fog 1; ...; n, fog n - 1
-        self.n_actions = 1 + num_fog
+        # ACTION: -1: DoNothing; 0: local; 1: fog 0; 2, fog 1; ...; n, fog n - 1
+        self.n_actions = 1 + 1 + num_fog
         # STATE: [A, t^{comp}, t^{tran}, [B^{fog}]]
         self.n_features = 1 + 1 + 1 + num_fog
         # LSTM STATE
@@ -120,15 +120,8 @@ class FOGEnv(ParallelEnv):
 
         # Possible actions are self_compute + num_of_fog
         self.action_spaces = dict(
-            zip(self.agents, [Discrete(self.n_fog + 1)] * len(self.agents)))
+            zip(self.agents, [Discrete(self.n_actions)] * len(self.agents)))
 
-        # Action mask for indicating valid actions (adjacent grid cells a drone can
-        # move to) at a time-step
-        self.action_mask = {
-            agent: np.ones((self.n_fog + 2,), dtype=int) for agent in self.agents}
-
-        # if self.path is not None and self.save_results:
-        #     self.save_env()
 
     def reset(self):
         # test
@@ -208,7 +201,11 @@ class FOGEnv(ParallelEnv):
 
             observations[agent]['action_mask'] = np.ones(self.n_actions)
             if np.sum(observation_all[iot_index, :]) == 0:
+                # Make DoNothing the only valid action
                 observations[agent]['action_mask'][1:] = 0
+            else:
+                # Make DoNothing an invalid action
+                observations[agent]['action_mask'][0] = 0
 
         # Empty infos dict ∀ agents
         infos = {agent: {} for agent in self.agents}
@@ -224,13 +221,15 @@ class FOGEnv(ParallelEnv):
         truncations = {a: False for a in self.agents}
 
         # EXTRACT ACTION FOR EACH IOT
-        iot_action_local = np.zeros([self.n_iot], np.int32)
+        iot_action_local = np.ones([self.n_iot], np.int32) * -1.0  # Default: DoNothing
         iot_action_fog = np.zeros([self.n_iot], np.int32)
         for iot_index in range(self.n_iot):
-            iot_action = actions[f"iot_{iot_index}"]
-            iot_action_fog[iot_index] = int(iot_action - 1)
+            iot_action = actions[f"iot_{iot_index}"] - 1
+            iot_action_fog[iot_index] = max(-1, int(iot_action - 1))
             if iot_action == 0:
-                iot_action_local[iot_index] = 1
+                iot_action_local[iot_index] = 1  # Action: Local
+            elif iot_action > 0:
+                iot_action_local[iot_index] = 0  # Action: FOG
 
         # COMPUTATION QUEUE UPDATE ===================
         for iot_index in range(self.n_iot):
@@ -499,7 +498,11 @@ class FOGEnv(ParallelEnv):
         for agent in self.agents:
             observations[agent]['action_mask'] = np.ones(self.n_actions)
             if np.sum(observations[agent]['obs_mob']) == 0:
+                # Make DoNothing the only valid action
                 observations[agent]['action_mask'][1:] = 0
+            else:
+                # Make DoNothing an invalid action
+                observations[agent]['action_mask'][0] = 0
 
         # Check if end of episode
         if done:

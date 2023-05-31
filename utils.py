@@ -70,9 +70,11 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
                 actions[agent] = rl_agents[agent].get_action(
                     torch.unsqueeze(torch.vstack(
                                     tuple(obs_fog_buff[agent])).float().to(device), 0),
-                    obs_mob[agent], action_mask=action_mask[agent], inference=True)
+                    obs_mob[agent], action_mask=action_mask[agent], inference=True)#, display=(agent == 'iot_2'))
 
                 actions_dict[agent].append(actions[agent].item())
+                # if agent == 'iot_2':
+                #     print(f"{agent}: {actions[agent].item()}")
 
             obs, rewards, terms, truncs, infos = \
                 env.step(unbatchify(actions, env))
@@ -103,9 +105,11 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
                         rewards_list.append(-reward)
                         # rewards_list.append(reward)
 
-    for a in env.possible_agents:
+    for ind, a in enumerate(env.possible_agents):
         count = {action: actions_dict[a].count(action) for action in range(env.n_actions)}
-        print(f"{a}: {count}")
+        print(f"{a}: {count} - {np.sum(env.bitArrive[:, ind] > 0)}")
+
+    # print(f"{env.bitArrive[:, ind]}")
 
     return (np.mean(rewards_list)/env.n_iot, np.mean(dropped_list)/env.n_iot,
             np.mean(delay_list)/env.n_iot)

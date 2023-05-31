@@ -182,7 +182,7 @@ if __name__ == "__main__":
     TARGET_KL = None      # Smoothes out the KL-Distributions, but really hard to tune
 
     # ADAM
-    LR = 0.0001           # Learning rate
+    LR = 0.001           # Learning rate
     ANNEAL_LR = False     # For decaying learning rate over time
 
     parser = argparse.ArgumentParser(description='DQL for Mobile Edge Computing')
