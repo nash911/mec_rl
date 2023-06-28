@@ -472,7 +472,7 @@ class FOGEnv(ParallelEnv):
 
         # Initialize observations and action_mask ∀ agents
         observations = {a: {"obs_mob": np.zeros(self.n_features),
-                            "obs_fog": np.zeros(self.n_features),
+                            "obs_fog": np.zeros(self.n_lstm_state),
                             "action_mask": None}
                         for a in self.agents}
 

@@ -3,6 +3,7 @@ import time
 import matplotlib.pyplot as plt
 
 from typing import Optional
+from collections import deque
 
 import torch
 import torch.nn as nn
@@ -11,7 +12,7 @@ from utils import batchify_obs, batchify, unbatchify, evaluate, plot_all_marl, p
 
 
 class CleanPPO():
-    def __init__(self, train_env, eval_env, agents, optimizers, max_recurrent_steps,
+    def __init__(self, train_env, eval_env, agents, optimizers, max_seq_len,
                  episode_length, device):
 
         self.device = device
@@ -25,7 +26,7 @@ class CleanPPO():
             train_env.observation_space(train_env.possible_agents[0])['obs_mob'].shape
         self.obs_fog_size = \
             train_env.observation_space(train_env.possible_agents[0])['obs_fog'].shape
-        self.max_recurrent_steps = max_recurrent_steps
+        self.max_seq_len = max_seq_len
         self.episode_len = episode_length
 
         self.agents = agents
@@ -57,7 +58,8 @@ class CleanPPO():
             agent: torch.zeros((self.episode_len, *self.obs_mob_size)).to(self.device)
             for agent in self.train_env.possible_agents}
         obs_fog_buff = {
-            agent: torch.zeros((self.episode_len, *self.obs_fog_size)).to(self.device)
+            agent: torch.zeros((self.episode_len, self.max_seq_len,
+                                *self.obs_fog_size)).to(self.device)
             for agent in self.train_env.possible_agents}
         action_masks_buff = {
             agent: torch.zeros((self.episode_len, self.num_actions)).to(self.device)
@@ -111,6 +113,11 @@ class CleanPPO():
             end_step = self.episode_len - 1
             # total_episodic_return = 0
 
+            fog_que = {agent: deque(np.zeros((self.max_seq_len,
+                                              *self.obs_fog_size)).tolist(),
+                                    maxlen=self.max_seq_len)
+                       for agent in self.train_env.possible_agents}
+
             # The episode loop - Rollout and collect transitions
             for step in range(0, self.episode_len):
                 actions = {}
@@ -121,19 +128,28 @@ class CleanPPO():
                 with torch.no_grad():
                     for agent in self.train_env.possible_agents:
                         # Save FOG_observations to rollout buffer
-                        obs_fog_buff[agent][step] = next_obs_fog[agent]
+                        # obs_fog_buff[agent][step] = next_obs_fog[agent]
+                        fog_que[agent].append(next_obs_fog[agent])
 
-                        start_idx = max(0, step - self.max_recurrent_steps)
-                        end_idx = max(step, 1)
+                        # start_idx = max(0, step - self.max_seq_len)
+                        # end_idx = max(step, 1)
+                        # recurrent_inp = torch.unsqueeze(
+                        #     obs_fog_buff[agent][start_idx:end_idx], 0)
+                        # # print(f"step: {step} -- start_idx: {start_idx} -- recurrent_inp.shape: {recurrent_inp.shape}")
+
+                        # print(f"fog_que[agent]: {fog_que[agent]}")
+
                         recurrent_inp = torch.unsqueeze(
-                            obs_fog_buff[agent][start_idx:end_idx], 0)
-                        # print(f"step: {step} -- start_idx: {start_idx} -- recurrent_inp.shape: {recurrent_inp.shape}")
+                            torch.tensor(fog_que[agent],
+                                         dtype=torch.float32).to(self.device), 0)
 
                         # Get the action, logp, and value for each learning-agent
                         actions[agent], logprobs[agent], _, values[agent] = \
                             self.agents[agent].get_action_and_value(
                                 recurrent_inp=recurrent_inp, fc_inp=next_obs_mob[agent],
                                 action_mask=next_action_mask[agent])
+
+                        obs_fog_buff[agent][step] = recurrent_inp
 
                 # Perform one-step of the simulation
                 new_obs, rewards, terms, truncs, info = \
@@ -145,6 +161,7 @@ class CleanPPO():
                 # Check if the episode has terminated or truncated
                 done = any([terms[a] for a in terms]) or any([truncs[a] for a in truncs])
                 terms = batchify(terms, self.train_env, self.device)
+                truncs = batchify(truncs, self.train_env, self.device)
 
                 process_delay = self.train_env.process_delay
                 unfinish_inds = self.train_env.process_delay_unfinish_ind
@@ -157,7 +174,8 @@ class CleanPPO():
                     actions_buff[agent][step] = actions[agent]
                     logprobs_buff[agent][step] = logprobs[agent]
                     # rewards_buff[agent][step] = rewards[agent]
-                    dones_buff[agent][step] = terms[agent]
+                    # dones_buff[agent][step] = terms[agent]
+                    dones_buff[agent][step] = truncs[agent]
                     values_buff[agent][step] = values[agent]
 
                     # # Keep track of cummulative episodic reward
@@ -200,9 +218,14 @@ class CleanPPO():
                     with torch.no_grad():
                         # Calculate and save next_values to rollout buffer
                         for agent in self.train_env.possible_agents:
-                            start_idx = max(0, step - self.max_recurrent_steps)
-                            recurrent_inp = torch.unsqueeze(
-                                obs_fog_buff[agent][start_idx:step], 0)
+                            # start_idx = max(0, step - self.max_seq_len)
+                            # recurrent_inp = torch.unsqueeze(
+                            #     obs_fog_buff[agent][start_idx:step], 0)
+
+                            fog_que[agent].append(next_obs_fog[agent])
+                            # print(f"Done:\n{fog_que[agent]}")
+                            recurrent_inp = torch.unsqueeze(torch.tensor(
+                                fog_que[agent], dtype=torch.float32).to(self.device), 0)
 
                             values = self.agents[agent].get_value(recurrent_inp,
                                                                   next_obs_mob[agent])
@@ -222,7 +245,9 @@ class CleanPPO():
             if (episode - 1) % eval_freq == 0 or episode == num_episodes:
                 self.eval_agent()
                 eval_reward, eval_dropped, eval_delay = evaluate(
-                    env=self.train_env, rl_agents=self.agents, device=self.device)
+                    env=self.train_env, rl_agents=self.agents, device=self.device,
+                    max_seq_len=self.max_seq_len,
+                    obs_fog_size=self.obs_fog_size)
                 self.train_agent()
 
                 eval_rewards.append(eval_reward)
@@ -300,37 +325,25 @@ class CleanPPO():
                 b_inds = np.where(torch.sum(b_obs_mob, axis=-1) != 0)[0]
                 # print(f"AFTER b_inds:{b_inds}")
 
-                b_size = (batch_size + 1 if len(b_inds) % batch_size == 1 else batch_size)
+                # b_size = (batch_size + 1 if len(b_inds) % batch_size == 1 else batch_size)
 
                 for epoch in range(update_epochs):
                     np.random.shuffle(b_inds)
                     # for start in range(0, len(b_obs_mob), batch_size):
-                    #     end = start + batch_size
-                    for start in range(0, len(b_inds), b_size):
-                        end = start + b_size
+                    for start in range(0, len(b_inds), batch_size):
+                        end = start + batch_size
+                    # for start in range(0, len(b_inds), b_size):
+                    #     end = start + b_size
+                        # print(f"len(b_inds): {len(b_inds)}  -- start:{start} end: {end}")
+                        if (len(b_inds) - end) == 1:
+                            end += 1
+
                         mb_inds = b_inds[start:end]
-
-                        # print(f"epoch: {epoch} // start: {start}  --  end: {end}")
-
-                        recurrent_inp = torch.zeros((len(mb_inds),
-                                                     self.max_recurrent_steps,
-                                                     self.train_env.n_lstm_state)
-                                                    ).to(self.device)
-
-                        # print(f"recurrent_inp.shape: {recurrent_inp.shape}")
-
-                        for i, ind in enumerate(mb_inds):
-                            start_idx = max(0, ind - self.max_recurrent_steps)
-                            end_idx = max(1, ind)
-                            #rec_inps = obs_fog_buff[agent][start_idx:end_idx]
-                            rec_inps = b_obs_fog[start_idx:end_idx]
-                            # print(f"rec_inps.shape: {rec_inps.shape} -- len(b_obs_mob): {len(b_obs_mob)}")
-                            # print(f"ind: {ind} -- start_idx: {start_idx}")
-                            recurrent_inp[i, -rec_inps.shape[0]:, :] = rec_inps
 
                         _, newlogprob, entropy, newvalue = \
                             self.agents[agent].get_action_and_value(
-                                recurrent_inp=recurrent_inp,
+                                # recurrent_inp=recurrent_inp,
+                                recurrent_inp=b_obs_fog[mb_inds],
                                 fc_inp=b_obs_mob[mb_inds],
                                 action=b_actions.long()[mb_inds],
                                 action_mask=b_action_masks[mb_inds])
@@ -385,6 +398,9 @@ class CleanPPO():
                                                      max_grad_norm)
 
                         self.optimizers[agent].step()
+
+                        if (len(b_inds) - end) == 0:
+                            break
 
                     if target_kl is not None:
                         if approx_kl > target_kl:

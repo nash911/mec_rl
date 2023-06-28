@@ -32,38 +32,24 @@ class NNAgent(nn.Module):
 
     def get_value(self, recurrent_inp, fc_inp, fc_out=None):
         if fc_out is None:
-            # recurrent_out = self.recurrent_layer(recurrent_inp)[0][:, -1, :]
-            # try:
-            #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-            # except RuntimeError:
-            #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out[0])))
-
             recurrent_out = torch.squeeze(
                 self.recurrent_layer(recurrent_inp)[0][:, -1, :], 0)
-            fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-
-            # print(f"recurrent_inp: {recurrent_inp.shape}")
-            # print(f"fc_inp: {fc_inp.shape}")
-            # print(f"recurrent_out: {recurrent_out.shape}")
+            # fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
+            fc_out = self.network(
+                torch.hstack((fc_inp, torch.squeeze(recurrent_inp[:, -1, :], 0),
+                              recurrent_out)))
 
         return self.critic(fc_out)
 
     def get_action(self, recurrent_inp, fc_inp, fc_out=None, action_mask=None,
                    inference=False):
         if fc_out is None:
-            # recurrent_out = self.recurrent_layer(recurrent_inp)[0][:, -1, :]
-            # try:
-            #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-            # except RuntimeError:
-            #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out[0])))
-
             recurrent_out = torch.squeeze(
                 self.recurrent_layer(recurrent_inp)[0][:, -1, :], 0)
-            fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-
-            # print(f"recurrent_inp: {recurrent_inp.shape}")
-            # print(f"fc_inp: {fc_inp.shape}")
-            # print(f"recurrent_out: {recurrent_out.shape}")
+            # fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
+            fc_out = self.network(
+                torch.hstack((fc_inp, torch.squeeze(recurrent_inp[:, -1, :], 0),
+                              recurrent_out)))
 
         logits = self.actor(fc_out)
 
@@ -81,33 +67,24 @@ class NNAgent(nn.Module):
 
     def get_action_and_value(self, recurrent_inp, fc_inp, action=None, action_mask=None,
                              inference=False):
-        # recurrent_out = self.recurrent_layer(recurrent_inp)[0][:, -1, :]
-        # # print(f"recurrent_inp: {recurrent_inp.shape}")
-        # # print(f"fc_inp: {fc_inp.shape}")
-        # # print(f"recurrent_out: {recurrent_out.shape}")
-        # try:
-        #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-        # except RuntimeError:
-        #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out[0])))
-
         recurrent_out = torch.squeeze(self.recurrent_layer(recurrent_inp)[0][:, -1, :], 0)
         # print(f"recurrent_inp: {recurrent_inp.shape}")
         # print(f"fc_inp: {fc_inp.shape}")
         # print(f"recurrent_out: {recurrent_out.shape}")
+        # print(f"recurrent_inp[:, -1, :].shape: {recurrent_inp[:, -1, :].shape}\n")
 
-        fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-        # try:
-        #     fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
-        # except RuntimeError:
-        #     fc_out = \
-        #         self.network(torch.hstack((fc_inp, torch.unsqueeze(recurrent_out, 0))))
+        # fc_out = self.network(torch.hstack((fc_inp, recurrent_out)))
+        fc_out = self.network(
+            torch.hstack((fc_inp, torch.squeeze(recurrent_inp[:, -1, :], 0),
+                          recurrent_out)))
 
         logits = self.actor(fc_out)
 
         if action_mask is not None:
-            # print(f"logits:\n{logits}")
-            # print(f"action_mask:\n{action_mask}")
+            # print(f"BEFORE logits:{logits.shape}")
+            # print(f"action_mask:{action_mask}")
             logits += torch.log(action_mask)
+            # print(f"AFTER  logits:{logits.shape}\n")
 
         probs = Categorical(logits=logits)
 
@@ -116,5 +93,10 @@ class NNAgent(nn.Module):
                 action = probs.sample()
             else:
                 action = torch.argmax(probs.probs, dim=-1)
+            # print(f"action.shape: {type(action)}\n")
+        # else:
+        #     print(f"recurrent_inp: {recurrent_inp.shape}")
+        #     print(f"fc_inp: {fc_inp.shape}")
+        #     print(f"recurrent_out: {recurrent_out.shape}\n")
 
         return action, probs.log_prob(action), probs.entropy(), self.critic(fc_out)

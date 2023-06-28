@@ -12,8 +12,9 @@ def batchify_obs(obs, env, device):
     # convert to torch
     obs_mob = {agent: torch.tensor(obs[agent]['obs_mob']).float().to(device)
                for agent in env.possible_agents}
-    obs_fog = {agent: torch.tensor(obs[agent]['obs_fog']).float().to(device)
-               for agent in env.possible_agents}
+    # obs_fog = {agent: torch.tensor(obs[agent]['obs_fog']).float().to(device)
+    #            for agent in env.possible_agents}
+    obs_fog = {agent: obs[agent]['obs_fog'] for agent in env.possible_agents}
     action_masks = {agent: torch.tensor(obs[agent]['action_mask']).float().to(device)
                     for agent in env.possible_agents}
 
@@ -37,7 +38,7 @@ def unbatchify(x, env):
     return x
 
 
-def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
+def evaluate(env, rl_agents, device, obs_fog_size, max_seq_len=10, path=None,
              num_episodes: int = 1) -> Sequence[Union[int, float]]:
     actions = {}
     actions_dict = {agent: list() for agent in env.possible_agents}
@@ -52,8 +53,11 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
         # For updating rewards
         reward_indicator = np.zeros([env.n_time, env.n_iot])
 
-        obs_fog_buff = {
-            agent: deque(maxlen=max_recurrent_steps) for agent in env.possible_agents}
+        # obs_fog_buff = {
+        #     agent: deque(maxlen=max_seq_len) for agent in env.possible_agents}
+
+        fog_que = {agent: deque(np.zeros((max_seq_len, *obs_fog_size)).tolist(),
+                                maxlen=max_seq_len) for agent in env.possible_agents}
 
         obs, _ = env.reset()
 
@@ -65,12 +69,14 @@ def evaluate(env, rl_agents, device, max_recurrent_steps=10, path=None,
             obs_mob, obs_fog, action_mask = batchify_obs(obs, env, device)
             for agent in env.possible_agents:
                 # Save FOG_observations to buffer
-                obs_fog_buff[agent].append(obs_fog[agent])
+                fog_que[agent].append(obs_fog[agent])
+
+                recurrent_inp = torch.unsqueeze(
+                    torch.tensor(fog_que[agent], dtype=torch.float32).to(device), 0)
 
                 actions[agent] = rl_agents[agent].get_action(
-                    torch.unsqueeze(torch.vstack(
-                                    tuple(obs_fog_buff[agent])).float().to(device), 0),
-                    obs_mob[agent], action_mask=action_mask[agent], inference=True)#, display=(agent == 'iot_2'))
+                    recurrent_inp=recurrent_inp, fc_inp=obs_mob[agent], inference=True,
+                    action_mask=action_mask[agent])
 
                 actions_dict[agent].append(actions[agent].item())
                 # if agent == 'iot_2':

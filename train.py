@@ -27,7 +27,7 @@ def save_learning_params() -> Mapping[str, bool | int | float]:
     learning_params['recurrent_hidden_size'] = RECURRENT_HIDDEN_SIZE
     learning_params['hl_1_size'] = HL1_SIZE
     learning_params['hl_2_size'] = HL2_SIZE
-    learning_params['max_recurrent_steps'] = MAX_RECURRENT_STEPS
+    learning_params['max_seq_len'] = MAX_SEQ_LEN
 
     # PPO
     learning_params['entrophy_coefficient'] = ENT_COEF
@@ -104,7 +104,7 @@ def main(args):
     """ LEARNER SETUP FOR RL VS RL"""
     # RL Agents - Policy and Value Networks for the RL agent
     rl_agents = {agent: NNAgent(
-        recurrent_inp_size=obs_fog_size, fc_inp_size=obs_mob_size,
+        recurrent_inp_size=obs_fog_size, fc_inp_size=obs_mob_size+obs_fog_size,
         num_actions=num_actions, recurrent_hidden_size=RECURRENT_HIDDEN_SIZE,
         hl_1_size=HL1_SIZE, hl_2_size=HL2_SIZE).to(device)
         for agent in train_env.possible_agents}
@@ -115,7 +115,7 @@ def main(args):
 
     # PPO algorithm with SelfPlay MARL
     ppo = CleanPPO(train_env=train_env, eval_env=eval_env, agents=rl_agents,
-                   optimizers=optimizers, max_recurrent_steps=MAX_RECURRENT_STEPS,
+                   optimizers=optimizers, max_seq_len=MAX_SEQ_LEN,
                    episode_length=NUM_TIME, device=device)
 
     # Save the learning parameters for reference
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     RECURRENT_HIDDEN_SIZE = 20
     HL1_SIZE = 20
     HL2_SIZE = 20
-    MAX_RECURRENT_STEPS = 10
+    MAX_SEQ_LEN = 10
 
     # PPO
     ENT_COEF = 0.1        # Entropy
